@@ -28,7 +28,7 @@ class DCO(Component):
             num_samples = port_values[self.num_samples]
             sample_range = range(sample_num, sample_num + num_samples)
             sin_rate = 2.0 * math.pi * frequency / sample_rate
-            port_values[self.output] = numpy.sin(
-                numpy.array([sample * sin_rate for sample in sample_range],  dtype=numpy.float32))
+            sample_nums = numpy.arange(sample_num, sample_num + num_samples, dtype=numpy.float32)
+            port_values[self.output] = numpy.sin(sample_nums * sin_rate)
             sample_num += num_samples
             yield

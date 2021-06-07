@@ -1,0 +1,13 @@
+name: snyth
+channels:
+  - conda-forge
+dependencies:
+  - numpy
+  - pip
+  - pyaudio
+  - python-graphviz
+  - python=3.8
+  - pip:
+    - -e .
+    - keyboard
+    - pygame

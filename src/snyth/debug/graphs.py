@@ -1,52 +1,33 @@
 # Copyright 2021 Luke Zulauf
 # All rights reserved.
+from collections import defaultdict
 from itertools import chain
 
 import graphviz
 from matplotlib import pyplot
-import numpy
-from numpy import fft
+import numpy.fft
 
 from snyth import Settings
-
-
-def get_samples(voice, port=None, periods=None, seconds=1):
-    if port is None:
-        port = voice.algorithm.outputs.output
-        
-    sample_rate = Settings.instance().sample_rate
-    frame_length = (sample_rate * periods) // voice.frequency if periods else sample_rate * seconds
-    samples = []
-    generator = voice.generate()
-    while len(samples) < frame_length:
-        next(generator)
-        new_samples = voice.get_port_value(port)
-        if isinstance(new_samples, (numpy.ndarray, list)):
-            samples_to_add = min(len(new_samples), frame_length - len(samples))
-            samples.extend(new_samples[:samples_to_add].tolist())
-        else:
-            samples.append(new_samples)
-       
-    return samples
-
-
-def get_fft(samples):
-    return numpy.abs(fft.rfft(samples))**2 # Convert to power (**2)
+from snyth.ports import _InputPort, _OutputPort
+from snyth.debug.samples import get_fft, get_samples, get_voice_samples, periods_to_seconds
 
 
 def graph_output(voice, port=None, periods=None, seconds=1):
+    seconds = periods_to_seconds(voice, periods, seconds)
     samples = get_samples(voice, port=port, periods=periods, seconds=seconds)
+    seconds_per_sample = seconds / len(samples)
+    X = [sample_num * seconds_per_sample for sample_num in range(len(samples))]
     fig = pyplot.figure(figsize=(8*2,4*2))
-    pyplot.plot(samples, label=f"Waveform of {voice.frequency} Hz Sine Wave")
+    pyplot.plot(X, samples, label=f"Waveform of {voice.frequency} Hz Sine Wave")
     pyplot.legend(loc='lower right')
     pyplot.show()
     
     
 def graph_fft(voice, port=None, periods=None, seconds=1):
-    samples = get_samples(voice, port=port, periods=periods, seconds=seconds)
+    samples = get_voice_samples(voice, port=port, periods=periods, seconds=seconds)
     fft_results = get_fft(samples)
     Y = fft_results
-    X = fft.fftfreq(Y.size, d=1/Settings.instance().sample_rate)
+    X = numpy.fft.fftfreq(Y.size, d=1/Settings.instance().sample_rate)
     fig = pyplot.figure(figsize=(16,5))
     axes = fig.add_axes([0,0,1,1])
     axes.set_xlim(0, 20000)
@@ -55,14 +36,7 @@ def graph_fft(voice, port=None, periods=None, seconds=1):
     pyplot.show()
 
 
-def graph_voice_graphviz(voice, global_time, local_time):
-    return graph_algorithm_graphviz(algorithm=voice.algorithm, voice=voice, global_time=global_time, local_time=local_time)
-
-
-def graph_algorithm_graphviz(algorithm, voice=None, global_time=None, local_time=None):
-    if voice:
-        assert global_time is not None
-        assert local_time is not None
+def graph_algorithm_graphviz(algorithm):
     all_patches = algorithm.get_all_patches_from()
     all_ports = {
         port
@@ -74,11 +48,7 @@ def graph_algorithm_graphviz(algorithm, voice=None, global_time=None, local_time
         by_component[port.instance].add(port)
         
     def _port_node(graph, port):
-        port_sample = ''
-        if voice:
-            with voice:
-                port_sample = port.get_sample(algorithm, global_time, local_time)
-        graph.node(repr(port), f'{port.port_name}\n{port_sample}')
+        graph.node(repr(port), port_name)
         
     components = {port.instance for port in all_ports} 
     digraph = graphviz.Digraph()
